@@ -11,12 +11,43 @@ export default function Home() {
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const [recommendedStreams, setRecommendedStreams] = useState<StreamData[]>([]);
   const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
-  const [loading, setLoading] = useState(false); // Ensure semicolon is present
-  const [isModalOpen, setIsModalOpen] = useState(false); // State for modal visibility
+  const [language, setLanguage] = useState("pt"); // Add language state
+  const [loading, setLoading] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Add translations
+  const translations = {
+    pt: {
+      chooseYourPlatform: "Escolhe a sua plataforma",
+      goTo: "Ir para",
+      recommendedStreams: "Streams Recomendados",
+      recommendedVideos: "Vídeos Recomendados",
+      totalViewers: "Total de Espectadores",
+      activeBroadcasters: "Transmissores Ativos",
+      topCategory: "Categoria Principal",
+      viewers: "espectadores"
+    },
+    en: {
+      chooseYourPlatform: "Choose your platform",
+      goTo: "Go to",
+      recommendedStreams: "Recommended Streams",
+      recommendedVideos: "Recommended Videos",
+      totalViewers: "Total Viewers",
+      activeBroadcasters: "Active Broadcasters",
+      topCategory: "Top Category",
+      viewers: "viewers"
+    }
+  };
 
   useEffect(() => {
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     setTheme(prefersDark ? "dark" : "light");
+    
+    // Load saved language preference
+    const savedLanguage = localStorage.getItem("language");
+    if (savedLanguage) {
+      setLanguage(savedLanguage);
+    }
 
     const savedPlatform = localStorage.getItem("selectedPlatform");
     if (savedPlatform) {
@@ -124,8 +155,30 @@ export default function Home() {
     return num.toString();
   };
 
+  const toggleLanguage = () => {
+    const newLanguage = language === "pt" ? "en" : "pt";
+    setLanguage(newLanguage);
+    localStorage.setItem("language", newLanguage);
+  };
+
   return (
     <div className={`min-h-screen bg-gradient-to-b ${theme === 'light' ? 'from-gray-50 to-gray-100' : 'from-gray-900 to-gray-800'} relative`}>
+      {/* Add language and theme toggles */}
+      <div className="fixed top-4 right-4 flex items-center space-x-4 z-50">
+        <button
+          onClick={toggleLanguage}
+          className={`px-3 py-2 rounded-lg bg-white/10 backdrop-blur-sm ${theme === 'light' ? 'text-black' : 'text-white'} hover:bg-white/20 transition-colors`}
+        >
+          {language === "pt" ? "EN" : "PT"}
+        </button>
+        <button
+          onClick={toggleTheme}
+          className={`p-2 rounded-lg bg-white/10 backdrop-blur-sm ${theme === 'light' ? 'text-black' : 'text-white'} hover:bg-white/20 transition-colors`}
+        >
+          {theme === "light" ? "🌙" : "☀️"}
+        </button>
+      </div>
+
       {/* Modal for Shrek image */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -145,15 +198,8 @@ export default function Home() {
       <div className="container mx-auto px-4 py-16">
         <div className="flex flex-col items-center justify-center space-y-12">
           <header className="text-center space-y-4">
-            <h1 className="text-4xl md:text-5xl font-bold tracking-tight font-mono text-black">
-              Escolhe a sua <span className="relative">
-                <button
-                  onClick={() => setIsModalOpen(true)} // Open modal on click
-                  className="absolute inset-0 w-full h-full opacity-0"
-                >
-                  sua
-                </button>
-              </span>plataforma
+            <h1 className={`text-4xl md:text-5xl font-bold tracking-tight font-mono ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+              {translations[language].chooseYourPlatform}
             </h1>
           </header>
 
@@ -202,7 +248,7 @@ export default function Home() {
                 rel="noopener noreferrer"
                 className={getButtonClasses(`group relative overflow-hidden bg-gradient-to-r from-purple-600/80 to-purple-800/80 p-4 transition-all duration-300 ease-in-out hover:shadow-purple-500/20 hover:from-purple-500/80 hover:to-purple-700/80 w-full flex items-center justify-center`, buttonStyle)}
               >
-                <span className="text-lg font-semibold text-white">Go to Twitch </span>
+                <span className="text-lg font-semibold text-white">{translations[language].goTo} Twitch</span>
               </a>
             </div>
 
@@ -242,7 +288,7 @@ export default function Home() {
                 rel="noopener noreferrer"
                 className={getButtonClasses(`group relative overflow-hidden bg-gradient-to-r from-red-600/80 to-red-800/80 p-4 transition-all duration-300 ease-in-out hover:shadow-red-500/20 hover:from-red-500/80 hover:to-red-700/80 w-full flex items-center justify-center`, buttonStyle)}
               >
-                <span className="text-lg font-semibold text-white">Go to YouTube </span>
+                <span className="text-lg font-semibold text-white">{translations[language].goTo} YouTube</span>
               </a>
             </div>
           </div>
@@ -255,15 +301,15 @@ export default function Home() {
                 {platformStats && (
                   <div className="mt-6 grid grid-cols-3 gap-4">
                     <div className="text-center">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Total Viewers</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{translations[language].totalViewers}</p>
                       <p className="text-xl font-bold text-gray-800 dark:text-white">{formatNumber(platformStats.totalViewers)}</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Active Broadcasters</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{translations[language].activeBroadcasters}</p>
                       <p className="text-xl font-bold text-gray-800 dark:text-white">{platformStats.activeBroadcasters}</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Top Category</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{translations[language].topCategory}</p>
                       <p className="text-xl font-bold text-gray-800 dark:text-white">{platformStats.topCategory}</p>
                     </div>
                   </div>
@@ -274,8 +320,8 @@ export default function Home() {
 
           {selectedPlatform && recommendedStreams.length > 0 && (
             <div className="w-full max-w-4xl mx-auto">
-              <h2 className="text-2xl font-bold mb-6 text-center text-black">
-                Recommended {selectedPlatform === "twitch" ? "Streams" : "Videos"}
+              <h2 className={`text-2xl font-bold mb-6 text-center ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+                {selectedPlatform === "twitch" ? translations[language].recommendedStreams : translations[language].recommendedVideos}
               </h2>
 
               {loading ? (
@@ -303,14 +349,14 @@ export default function Home() {
                           />
                           <div className="absolute bottom-2 right-2 bg-black/70 text-white px-2 py-1 rounded text-sm flex items-center gap-2">
                             <span className="bg-gray-700/50 px-2 py-0.5 rounded">{stream.category}</span>
-                            <span>{formatNumber(stream.viewerCount)} viewers</span>
+                            <span>{formatNumber(stream.viewerCount)} {translations[language].viewers}</span>
                           </div>
                         </div>
                         <div className="p-4">
-                          <h3 className="font-semibold text-lg line-clamp-1 text-black">{stream.title}</h3>
-                          <p className="text-sm text-black mt-1">{stream.streamerName}</p>
-                          <p className="text-xs text-black mt-1">{stream.category}</p>
-                          <p className="text-xs text-black mt-1">{stream.duration} minutes</p> 
+                          <h3 className={`font-semibold text-lg line-clamp-1 ${theme === 'light' ? 'text-black' : 'text-white'}`}>{stream.title}</h3>
+                          <p className={`text-sm ${theme === 'light' ? 'text-black' : 'text-white'} mt-1`}>{stream.streamerName}</p>
+                          <p className={`text-xs ${theme === 'light' ? 'text-black' : 'text-white'} mt-1`}>{stream.category}</p>
+                          <p className={`text-xs ${theme === 'light' ? 'text-black' : 'text-white'} mt-1`}>{stream.duration} minutes</p> 
                         </div>
                       </div>
                     </a>

@@ -1,9 +1,33 @@
-// API service for handling Twitch and YouTube API requests
+// API service for handling Twitch, YouTube, and Sigma API requests
 import axios from 'axios';
 
 // YouTube API constants
 const YOUTUBE_API_KEY = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY || '';
 const YOUTUBE_API_URL = 'https://www.googleapis.com/youtube/v3';
+
+// Sigma API constants
+const SIGMA_API_URL = process.env.NEXT_PUBLIC_SIGMA_API_URL || 'https://api.sigma.tv/v1';
+const USE_MOCK_DATA = process.env.NODE_ENV === 'test';
+
+// Twitch API constants
+const TWITCH_CLIENT_ID = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID || '';
+const TWITCH_CLIENT_SECRET = process.env.NEXT_PUBLIC_TWITCH_CLIENT_SECRET || '';
+const TWITCH_API_URL = 'https://api.twitch.tv/helix';
+const TWITCH_AUTH_URL = 'https://id.twitch.tv/oauth2/token';
+
+// Mock data for testing
+const MOCK_SIGMA_RESPONSE = {
+  streams: [
+    {
+      id: "sigma123",
+      title: "Test Stream",
+      viewer_count: 1500,
+      thumbnail_url: "https://example.com/thumbnail.jpg",
+      user_name: "TestStreamer",
+      category: "Gaming"
+    }
+  ]
+};
 
 // Types
 export type StreamData = {
@@ -14,6 +38,7 @@ export type StreamData = {
   streamerName: string;
   url: string;
   category: string;
+  platform?: 'youtube' | 'twitch' | 'sigma';
 };
 
 export type PlatformStats = {
@@ -22,17 +47,84 @@ export type PlatformStats = {
   topCategory?: string;
 };
 
-// Twitch API constants
-const TWITCH_CLIENT_ID = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID || '';
-const TWITCH_CLIENT_SECRET = process.env.NEXT_PUBLIC_TWITCH_CLIENT_SECRET || '';
-const TWITCH_API_URL = 'https://api.twitch.tv/helix';
-const TWITCH_AUTH_URL = 'https://id.twitch.tv/oauth2/token';
-
 // Twitch API
+export const twitchApi = {
+  // Get access token for Twitch API
+  getAccessToken: async () => {
+    try {
+      const response = await axios.post(`${TWITCH_AUTH_URL}?client_id=${TWITCH_CLIENT_ID}&client_secret=${TWITCH_CLIENT_SECRET}&grant_type=client_credentials&scope=channel:read:stream_key`);
+      if (response.data.access_token) {
+        return response.data.access_token;
+      } else {
+        throw new Error('Two-factor authentication required. Please enable 2FA in your Twitch account settings.');
+      }
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        console.error('Two-factor authentication required for this action');
+        throw new Error('Two-factor authentication required. Please enable 2FA in your Twitch account settings.');
+      }
+      console.error('Error getting Twitch access token:', error);
+      return null;
+    }
+  },
+
+  // Get streams from Twitch
+  getTopStreams: async (): Promise<{ streams: StreamData[], stats: PlatformStats } | null> => {
+    try {
+      if (!TWITCH_CLIENT_ID || !TWITCH_CLIENT_SECRET) {
+        throw new Error('Twitch API credentials are required');
+      }
+
+      // Get access token
+      const accessToken = await twitchApi.getAccessToken();
+      if (!accessToken) {
+        throw new Error('Failed to get Twitch access token');
+      }
+
+      // Get top streams
+      let url = `${TWITCH_API_URL}/streams?first=20&sort=viewers`;
+      
+
+      const streamsResponse = await axios.get(url, {
+        headers: {
+          'Client-ID': TWITCH_CLIENT_ID,
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+
+      // Transform the response data
+      const streams: StreamData[] = streamsResponse.data.data.map((stream: any) => ({
+        id: stream.id,
+        title: stream.title,
+        viewerCount: stream.viewer_count,
+        thumbnailUrl: stream.thumbnail_url.replace('{width}', '640').replace('{height}', '360'),
+        streamerName: stream.user_name,
+        url: `https://twitch.tv/${stream.user_login}`,
+        category: stream.game_name || 'Unknown',
+        platform: 'twitch'
+      }));
+
+      // Calculate total viewers from streams
+      const totalViewers = streams.reduce((acc, stream) => acc + stream.viewerCount, 0);
+
+      // Return streams and stats
+      return {
+        streams,
+        stats: {
+          totalViewers,
+          activeBroadcasters: streams.length,
+          topCategory: streams[0]?.title || 'Unknown'
+        }
+      };
+    } catch (error) {
+      console.error('Error fetching Twitch data:', error);
+      return null;
+    }
+  },
+};
+
 // YouTube API
 export const youtubeApi = {
-
-
   // Get trending videos from YouTube
   getTrendingVideos: async (): Promise<{ streams: StreamData[], stats: PlatformStats } | null> => {
     try {
@@ -71,7 +163,8 @@ export const youtubeApi = {
           thumbnailUrl: video.snippet.thumbnails.high?.url || video.snippet.thumbnails.default?.url || '',
           streamerName: video.snippet.channelTitle,
           url: `https://www.youtube.com/watch?v=${video.id}`,
-          category: video.snippet.categoryId || 'Unknown'
+          category: video.snippet.categoryId || 'Unknown',
+          platform: 'youtube'
         }));
 
       const totalViewers = streams.reduce((acc, stream) => acc + stream.viewerCount, 0);
@@ -97,79 +190,56 @@ export const youtubeApi = {
   }
 };
 
-// Twitch API
-export const twitchApi = {
-  // Get access token for Twitch API
-  getAccessToken: async () => {
-    try {
-      const response = await axios.post(`${TWITCH_AUTH_URL}?client_id=${TWITCH_CLIENT_ID}&client_secret=${TWITCH_CLIENT_SECRET}&grant_type=client_credentials&scope=channel:read:stream_key`);
-      if (response.data.access_token) {
-        return response.data.access_token;
-      } else {
-        throw new Error('Two-factor authentication required. Please enable 2FA in your Twitch account settings.');
-      }
-    } catch (error: any) {
-      if (error.response?.status === 403) {
-        console.error('Two-factor authentication required for this action');
-        throw new Error('Two-factor authentication required. Please enable 2FA in your Twitch account settings.');
-      }
-      console.error('Error getting Twitch access token:', error);
-      return null;
-    }
-  },
-
-
-
-  // Get streams from Twitch
+// Sigma API
+export const sigmaApi = {
+  // Get top streams from Sigma
   getTopStreams: async (): Promise<{ streams: StreamData[], stats: PlatformStats } | null> => {
     try {
-      if (!TWITCH_CLIENT_ID || !TWITCH_CLIENT_SECRET) {
-        throw new Error('Twitch API credentials are required');
-      }
-
-      // Get access token
-      const accessToken = await twitchApi.getAccessToken();
-      if (!accessToken) {
-        throw new Error('Failed to get Twitch access token');
-      }
-
-      // Get top streams
-      let url = `${TWITCH_API_URL}/streams?first=20&sort=viewers`;
+      let responseData;
       
+      if (USE_MOCK_DATA) {
+        responseData = MOCK_SIGMA_RESPONSE;
+      } else {
+        const response = await axios.get(`${SIGMA_API_URL}/streams/top`);
+        responseData = response.data;
+      }
+      
+      if (!responseData || !Array.isArray(responseData.streams)) {
+        console.warn('No streams returned from Sigma API');
+        return {
+          streams: [],
+          stats: {
+            totalViewers: 0,
+            activeBroadcasters: 0,
+            topCategory: 'Unknown'
+          }
+        };
+      }
 
-      const streamsResponse = await axios.get(url, {
-        headers: {
-          'Client-ID': TWITCH_CLIENT_ID,
-          'Authorization': `Bearer ${accessToken}`
-        }
-      });
-
-      // Transform the response data
-      const streams: StreamData[] = streamsResponse.data.data.map((stream: any) => ({
+      const streams: StreamData[] = responseData.streams.map((stream: any) => ({
         id: stream.id,
         title: stream.title,
-        viewerCount: stream.viewer_count,
-        thumbnailUrl: stream.thumbnail_url.replace('{width}', '640').replace('{height}', '360'),
+        viewerCount: stream.viewer_count || 0,
+        thumbnailUrl: stream.thumbnail_url,
         streamerName: stream.user_name,
-        url: `https://twitch.tv/${stream.user_login}`,
-        category: stream.game_name || 'Unknown'
+        url: `https://sigma.tv/${stream.user_name}`,
+        category: stream.category || 'Unknown',
+        platform: 'sigma'
       }));
 
-      // Calculate total viewers from streams
       const totalViewers = streams.reduce((acc, stream) => acc + stream.viewerCount, 0);
 
-      // Return streams and stats
       return {
         streams,
         stats: {
           totalViewers,
           activeBroadcasters: streams.length,
-          topCategory: streams[0]?.title || 'Unknown'
+          topCategory: streams[0]?.category || 'Unknown'
         }
       };
     } catch (error) {
-      console.error('Error fetching Twitch data:', error);
+      console.error('Error fetching Sigma data:', error);
       return null;
     }
-  },
+  }
 };
